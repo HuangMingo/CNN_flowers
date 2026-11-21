@@ -8,7 +8,7 @@ I wanted to gain hands-on experience with building CNNs for a multi-class image 
 
 ## Features
 
-- **Data Loading**: Automatically downloads and preprocesses the TensorFlow Flowers dataset.
+- **Data Loading**: Loads and preprocesses the Kaggle Flowers Recognition dataset from the local `datasets/flowers` directory.
 - **Image Preprocessing**: Uses OpenCV to resize images and normalizes pixel values.
 - **Data Augmentation**: Employs `RandomFlip`, `RandomRotation`, and `RandomZoom` to prevent overfitting and improve model generalization.
 - **CNN Architecture**: A sequential model featuring multiple convolutional blocks and a dropout layer for regularization.
@@ -17,7 +17,28 @@ I wanted to gain hands-on experience with building CNNs for a multi-class image 
 
 ## Dataset
 
-The project automatically downloads the [TensorFlow Flowers dataset](https://storage.googleapis.com/download.tensorflow.org/example_images/flower_photos.tgz), which contains 3,670 images of 5 different flower species.
+The project uses the [Kaggle Flowers Recognition dataset](https://www.kaggle.com/datasets/alxmamaev/flowers-recognition). The local copy currently contains 4,317 images divided into five classes:
+
+| Class | Images |
+| --- | ---: |
+| Daisy | 764 |
+| Dandelion | 1,052 |
+| Rose | 784 |
+| Sunflower | 733 |
+| Tulip | 984 |
+| **Total** | **4,317** |
+
+After downloading and extracting the dataset, use this directory structure:
+
+```text
+datasets/
+└── flowers/
+    ├── daisy/
+    ├── dandelion/
+    ├── rose/
+    ├── sunflower/
+    └── tulip/
+```
 
 ## Setup
 
@@ -35,7 +56,9 @@ pip install tensorflow matplotlib numpy opencv-python scikit-learn
    cd /CNN_flowers
    ```
 
-2. Run the script:
+2. Download the dataset from Kaggle and extract the five class directories into `datasets/flowers` as shown above.
+
+3. Run the script:
    ```bash
    python flowers_cnn.py
    ```
@@ -59,9 +82,7 @@ Here are some example predictions on the test set. Correctly classified images h
 
 ![Predictions](predictions.png)
 
- ## Stats
- accuracy: 0.9124 - loss: 0.2494
- val_accuracy: 0.7357 - val_loss: 0.9421
+The model and figures currently in the repository may have been produced with an earlier dataset. Run `flowers_cnn.py` again to regenerate all results with the Kaggle dataset before reporting final metrics.
 
 ## What I Learned
 

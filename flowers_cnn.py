@@ -1,32 +1,40 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import cv2
-import os
 import tensorflow as tf
 import pathlib
 from sklearn.model_selection import train_test_split
 
 # --- 1. LOAD AND PREPROCESS DATA ---
 
-# Download and extract the dataset
-dataset_url = "https://storage.googleapis.com/download.tensorflow.org/example_images/flower_photos.tgz"
-# The get_file function returns the path to the directory where the data is cached.
-# The actual image folders are inside a 'flower_photos' subdirectory.
-data_dir = tf.keras.utils.get_file('flower_photos', origin=dataset_url, cache_dir='.', untar=True)
-data_dir = pathlib.Path(data_dir) / 'flower_photos'
+# Use the Flowers Recognition dataset downloaded from Kaggle.
+# Resolve the path from this script so the project can be run from any directory.
+project_dir = pathlib.Path(__file__).resolve().parent
+data_dir = project_dir / 'datasets' / 'flowers'
+
+if not data_dir.is_dir():
+    raise FileNotFoundError(
+        f"Dataset directory not found: {data_dir}\n"
+        "Download the Kaggle Flowers Recognition dataset and extract it "
+        "to datasets/flowers."
+    )
 
 # Define class names and their corresponding labels
 flowers_labels_dict = {
-    'roses': 0,
-    'daisy': 1,
-    'dandelion': 2,
-    'sunflowers': 3,
-    'tulips': 4,
+    'daisy': 0,
+    'dandelion': 1,
+    'rose': 2,
+    'sunflower': 3,
+    'tulip': 4,
 }
 
 # Create a dictionary of image paths for each class
 flowers_images_dict = {
-    flower_name: list(data_dir.glob(f'{flower_name}/*'))
+    flower_name: [
+        image_path
+        for image_path in (data_dir / flower_name).iterdir()
+        if image_path.suffix.lower() in {'.jpg', '.jpeg', '.png'}
+    ]
     for flower_name in flowers_labels_dict.keys()
 }
 
@@ -35,10 +43,15 @@ X, y = [], []
 for flower_name, images in flowers_images_dict.items():
     for image in images:
         img = cv2.imread(str(image))
+        if img is None:
+            print(f"Skipping unreadable image: {image}")
+            continue
         # Resize all images to a consistent size
         resized_img = cv2.resize(img, (180, 180))
         X.append(resized_img)
         y.append(flowers_labels_dict[flower_name])
+
+print(f"Loaded {len(X)} images from {data_dir}")
 
 X = np.array(X)
 y = np.array(y)
