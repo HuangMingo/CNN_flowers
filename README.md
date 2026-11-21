@@ -1,34 +1,68 @@
-# Flowers Classification with CNNs
+# Nhận diện loài hoa bằng CNN và Gradio
 
-This project demonstrates image classification of five types of flowers (roses, daisies, dandelions, sunflowers, and tulips) using a Convolutional Neural Network (CNN) built with TensorFlow and Keras.
+Ứng dụng web chạy cục bộ, cho phép tải ảnh lên và nhận diện một trong năm
+loài hoa: hoa cúc, bồ công anh, hoa hồng, hướng dương và tulip. Ảnh không
+được gửi ra Internet.
 
-## Motivation
+## Yêu cầu
 
-I wanted to gain hands-on experience with building CNNs for a multi-class image classification problem, starting from raw images and implementing a complete training and evaluation pipeline.
+- Python 3.9–3.11 (môi trường hiện tại đã được kiểm tra với Python 3.9.13)
+- File mô hình `flowers_cnn_model.h5` đặt tại thư mục gốc của dự án
+- Windows, macOS hoặc Linux; không cần GPU
 
-## Features
+Thứ tự nhãn đã được xác minh từ script huấn luyện và trực tiếp trên model:
+`daisy`, `dandelion`, `rose`, `sunflower`, `tulip`.
 
-- **Data Loading**: Loads and preprocesses the Kaggle Flowers Recognition dataset from the local `datasets/flowers` directory.
-- **Image Preprocessing**: Uses OpenCV to resize images and normalizes pixel values.
-- **Data Augmentation**: Employs `RandomFlip`, `RandomRotation`, and `RandomZoom` to prevent overfitting and improve model generalization.
-- **CNN Architecture**: A sequential model featuring multiple convolutional blocks and a dropout layer for regularization.
-- **Training and Evaluation**: Trains the model, evaluates its performance on a test set, and saves the trained model.
-- **Result Visualization**: Generates and saves plots for training history and visualizes model predictions on test images.
+## Cài đặt
 
-## Dataset
+Trên Windows PowerShell:
 
-The project uses the [Kaggle Flowers Recognition dataset](https://www.kaggle.com/datasets/alxmamaev/flowers-recognition). The local copy currently contains 4,317 images divided into five classes:
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+```
 
-| Class | Images |
-| --- | ---: |
-| Daisy | 764 |
-| Dandelion | 1,052 |
-| Rose | 784 |
-| Sunflower | 733 |
-| Tulip | 984 |
-| **Total** | **4,317** |
+File `.h5` được bỏ qua bởi Git để tránh đưa mô hình lớn vào lịch sử. Sau khi
+clone repo, hãy tự chép `flowers_cnn_model.h5` vào cạnh `app.py`.
 
-After downloading and extracting the dataset, use this directory structure:
+## Chạy ứng dụng
+
+```powershell
+python app.py
+```
+
+Trình duyệt sẽ mở `http://127.0.0.1:7860`. Ứng dụng chỉ lắng nghe trên máy
+cục bộ và không tạo liên kết chia sẻ công khai. Dừng ứng dụng bằng `Ctrl+C`.
+
+Nếu cổng 7860 đang được sử dụng, đổi `server_port` trong `app.py`.
+
+## Kiểm thử
+
+```powershell
+python -m pytest -q
+```
+
+Các bài test đối chiếu pipeline Gradio RGB → BGR với pipeline OpenCV gốc trên
+10 ảnh mẫu. Sai khác xác suất cho phép nhỏ hơn `1e-4`.
+
+## Tiền xử lý khi dự đoán
+
+1. Chuyển ảnh Gradio từ RGB sang BGR.
+2. Resize về `180 × 180`.
+3. Chuyển sang `float32` và chia `255.0`.
+4. Thêm chiều batch thành `(1, 180, 180, 3)`.
+5. Áp dụng softmax cho 5 logits của model.
+
+Mô hình được tải đúng một lần khi ứng dụng khởi động. Vì chỉ biết năm lớp,
+mô hình vẫn sẽ gán ảnh ngoài phạm vi vào một lớp; giao diện cảnh báo khi xác
+suất cao nhất dưới 50%.
+
+## Huấn luyện lại
+
+Dataset không được lưu trong Git. Để chạy `flowers_cnn.py`, tải Flowers
+Recognition dataset và đặt ảnh theo cấu trúc:
 
 ```text
 datasets/
@@ -40,62 +74,11 @@ datasets/
     └── tulip/
 ```
 
-## Setup
+Sau đó chạy:
 
-To run this project, you need Python and the following libraries. You can install them using pip:
-
-```bash
-pip install tensorflow matplotlib numpy opencv-python scikit-learn
+```powershell
+python flowers_cnn.py
 ```
 
-## Usage
-
-1. Clone the repository and navigate to the project directory:
-   ```bash
-   git clone https://github.com/Ivan-Koptiev/CNN_flowers
-   cd /CNN_flowers
-   ```
-
-2. Download the dataset from Kaggle and extract the five class directories into `datasets/flowers` as shown above.
-
-3. Run the script:
-   ```bash
-   python flowers_cnn.py
-   ```
-
-## Outputs
-
-The script will generate the following files in the project directory:
-- `flowers_cnn_model.h5`: The saved Keras model after training.(Ended up being too big so was not included in final repo:( )
-- `model_performance.png`: A plot showing the training and validation accuracy and loss.
-- `predictions.png`: A 5x5 grid of test images with their predicted and true labels.
-
-## Results
-
-### Model Performance
-The plot below shows the learning curves for the model's accuracy and loss over 30 epochs.
-
-![Model Performance](model_performance.png)
-
-### Predictions
-Here are some example predictions on the test set. Correctly classified images have blue labels, while incorrect ones have red labels. The format is `Predicted (True)`.
-
-![Predictions](predictions.png)
-
-The model and figures currently in the repository may have been produced with an earlier dataset. Run `flowers_cnn.py` again to regenerate all results with the Kaggle dataset before reporting final metrics.
-
-## What I Learned
-
-- How to build an end-to-end image classification pipeline, from data loading to evaluation.
-- The importance of data augmentation in improving model robustness, especially with smaller datasets.
-- How to use `SparseCategoricalCrossentropy` for integer-based labels.
-
-## Challenges
-
-- Preprocessing a dataset of images with varying sizes and formats.
-- Tuning the model architecture and training epochs to achieve a good balance between bias and variance without excessive training time. 
-Unlike my cifar10 CNN which took about 30-35 minutes to train on my laptop, this model took just about 15 minutes!
-
-## License
-
-This project is licensed under the MIT License.
+Độ chính xác validation tham khảo khoảng 74%; kết quả thực tế có thể sai do
+mô hình còn overfit.

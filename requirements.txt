@@ -1,0 +1,8 @@
+tensorflow==2.20.0
+gradio==4.44.1
+huggingface-hub==0.25.2
+fastapi==0.115.4
+pydantic==2.9.2
+numpy==2.0.2
+opencv-python==5.1.0.95
+pytest==8.3.5
