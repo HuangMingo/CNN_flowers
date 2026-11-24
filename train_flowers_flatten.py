@@ -1,0 +1,211 @@
+import matplotlib.pyplot as plt
+import numpy as np
+import cv2
+import tensorflow as tf
+import pathlib
+from sklearn.model_selection import train_test_split
+
+# --- 1. LOAD AND PREPROCESS DATA ---
+
+# Use the Flowers Recognition dataset downloaded from Kaggle.
+# Resolve the path from this script so the project can be run from any directory.
+project_dir = pathlib.Path(__file__).resolve().parent
+data_dir = project_dir / "datasets" / "flowers"
+
+if not data_dir.is_dir():
+    raise FileNotFoundError(
+        f"Dataset directory not found: {data_dir}\n"
+        "Download the Kaggle Flowers Recognition dataset and extract it "
+        "to datasets/flowers."
+    )
+
+# Define class names and their corresponding labels
+flowers_labels_dict = {
+    "daisy": 0,
+    "dandelion": 1,
+    "rose": 2,
+    "sunflower": 3,
+    "tulip": 4,
+}
+
+# Create a dictionary of image paths for each class
+flowers_images_dict = {
+    flower_name: [
+        image_path
+        for image_path in (data_dir / flower_name).iterdir()
+        if image_path.suffix.lower() in {".jpg", ".jpeg", ".png"}
+    ]
+    for flower_name in flowers_labels_dict.keys()
+}
+
+# Load images and labels into arrays
+X, y = [], []
+for flower_name, images in flowers_images_dict.items():
+    for image in images:
+        img = cv2.imread(str(image))
+        if img is None:
+            print(f"Skipping unreadable image: {image}")
+            continue
+        # Resize all images to a consistent size
+        resized_img = cv2.resize(img, (180, 180))
+        X.append(resized_img)
+        y.append(flowers_labels_dict[flower_name])
+
+print(f"Loaded {len(X)} images from {data_dir}")
+
+X = np.array(X)
+y = np.array(y)
+
+# Split the data into training and testing sets
+X_train, X_temp, y_train, y_temp = train_test_split(
+    X, y, test_size=0.3, random_state=42, stratify=y
+)
+X_valid, X_test, y_valid, y_test = train_test_split(
+    X_temp, y_temp, test_size=0.50, random_state=42, stratify=y_temp
+)
+
+print("Train:", len(X_train))  # 70%
+print("Valid:", len(X_valid))  # 15%
+print("Test :", len(X_test))  # 15%
+# Normalize pixel values from 0-255 to 0-1 for all three splits.
+# Converting to float32 also uses less memory than NumPy's default float64.
+X_train_scaled = X_train.astype("float32") / 255.0
+X_valid_scaled = X_valid.astype("float32") / 255.0
+X_test_scaled = X_test.astype("float32") / 255.0
+
+
+# --- 2. DEFINE THE CNN MODEL WITH DATA AUGMENTATION ---
+# VERSION A: Flatten -> ~4 million trainable parameters
+
+# Define data augmentation layers to prevent overfitting
+data_augmentation = tf.keras.Sequential(
+    [
+        tf.keras.layers.RandomFlip("horizontal", input_shape=(180, 180, 3)),
+        tf.keras.layers.RandomRotation(0.1),
+        tf.keras.layers.RandomZoom(0.1),
+        tf.keras.layers.RandomContrast(0.1),
+        tf.keras.layers.RandomTranslation(0.1, 0.1),
+    ]
+)
+
+# Build the CNN model
+model = tf.keras.Sequential(
+    [
+        data_augmentation,
+        # Convolutional Block 1
+        tf.keras.layers.Conv2D(16, 3, padding="same", activation="relu"),
+        tf.keras.layers.MaxPooling2D(),
+        # Convolutional Block 2
+        tf.keras.layers.Conv2D(32, 3, padding="same", activation="relu"),
+        tf.keras.layers.MaxPooling2D(),
+        # Convolutional Block 3
+        tf.keras.layers.Conv2D(64, 3, padding="same", activation="relu"),
+        tf.keras.layers.MaxPooling2D(),
+        tf.keras.layers.Dropout(0.2),
+        # Flatten keeps every value from the last feature map, which gives the
+        # Dense layer below far more parameters (~4M total) than
+        # GlobalAveragePooling2D would (~32K total).
+        tf.keras.layers.Flatten(),
+        tf.keras.layers.Dense(128, activation="relu"),
+        # Output layer with units equal to the number of classes
+        tf.keras.layers.Dense(len(flowers_labels_dict)),
+    ]
+)
+
+
+# --- 3. COMPILE AND TRAIN THE MODEL ---
+
+# Compile the model
+# Using SparseCategoricalCrossentropy because labels are integers, not one-hot encoded
+model.compile(
+    optimizer="adam",
+    loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+    metrics=["accuracy"],
+)
+
+# Print model summary
+model.summary()
+
+# Stop training automatically once val_loss stops improving, and keep the
+# best-performing weights instead of whatever the last epoch happened to produce.
+early_stop = tf.keras.callbacks.EarlyStopping(
+    monitor="val_loss",
+    patience=5,  # cho 5 epoch khong cai thien moi dung
+    restore_best_weights=True,  # tu dong khoi phuc lai trong so tot nhat
+)
+# Train the model
+history = model.fit(
+    X_train_scaled,
+    y_train,
+    batch_size=64,
+    epochs=50,
+    validation_data=(X_valid_scaled, y_valid),
+    callbacks=[early_stop],
+    verbose=1,
+)
+
+
+# --- 4. EVALUATE AND SAVE ---
+
+# Evaluate the model
+test_loss, test_acc = model.evaluate(X_test_scaled, y_test, verbose=0)
+print(f"\n[FLATTEN VERSION] Test accuracy: {test_acc:.4f}")
+
+# Save the model
+model.save("flowers_cnn_model_flatten.h5")
+print("Model saved to flowers_cnn_model_flatten.h5")
+
+
+# --- 5. VISUALIZE RESULTS ---
+
+# Plot and save training history
+plt.figure(figsize=(12, 5))
+
+# Plot accuracy
+plt.subplot(1, 2, 1)
+plt.plot(history.history["accuracy"], label="Training Accuracy")
+plt.plot(history.history["val_accuracy"], label="Validation Accuracy")
+plt.title("Model Accuracy (Flatten, ~4M params)")
+plt.xlabel("Epoch")
+plt.ylabel("Accuracy")
+plt.legend()
+
+# Plot loss
+plt.subplot(1, 2, 2)
+plt.plot(history.history["loss"], label="Training Loss")
+plt.plot(history.history["val_loss"], label="Validation Loss")
+plt.title("Model Loss (Flatten, ~4M params)")
+plt.xlabel("Epoch")
+plt.ylabel("Loss")
+plt.legend()
+
+plt.tight_layout()
+plt.savefig("model_performance_flatten.png")
+print("Performance plot saved to model_performance_flatten.png")
+plt.show()
+
+# Visualize predictions
+class_names = list(flowers_labels_dict.keys())
+predictions = model.predict(X_test_scaled)
+
+plt.figure(figsize=(10, 10))
+for i in range(25):
+    plt.subplot(5, 5, i + 1)
+    plt.xticks([])
+    plt.yticks([])
+    plt.grid(False)
+    plt.imshow(X_test[i])
+
+    predicted_label_index = np.argmax(predictions[i])
+    true_label_index = y_test[i]
+
+    predicted_class = class_names[predicted_label_index]
+    true_class = class_names[true_label_index]
+
+    color = "blue" if predicted_label_index == true_label_index else "red"
+    plt.xlabel(f"{predicted_class} ({true_class})", color=color)
+
+plt.tight_layout()
+plt.savefig("predictions_flatten.png")
+print("Predictions plot saved to predictions_flatten.png")
+plt.show()
