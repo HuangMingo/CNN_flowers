@@ -20,7 +20,7 @@ if not data_dir.is_dir():
     )
 
 # Define class names and their corresponding labels
-flowers_labels_dict = {
+class_ids = {
     "daisy": 0,
     "dandelion": 1,
     "rose": 2,
@@ -29,18 +29,18 @@ flowers_labels_dict = {
 }
 
 # Create a dictionary of image paths for each class
-flowers_images_dict = {
-    flower_name: [
-        image_path
-        for image_path in (data_dir / flower_name).iterdir()
-        if image_path.suffix.lower() in {".jpg", ".jpeg", ".png"}
+class_paths = {
+    flower: [
+        img_path
+        for img_path in (data_dir / flower).iterdir()
+        if img_path.suffix.lower() in {".jpg", ".jpeg", ".png"}
     ]
-    for flower_name in flowers_labels_dict.keys()
+    for flower in class_ids.keys()
 }
 
 # Load images and labels into arrays
-X, y = [], []
-for flower_name, images in flowers_images_dict.items():
+imgs, labels = [], []
+for flower, images in class_paths.items():
     for image in images:
         img = cv2.imread(str(image))
         if img is None:
@@ -48,30 +48,30 @@ for flower_name, images in flowers_images_dict.items():
             continue
         # Resize all images to a consistent size
         resized_img = cv2.resize(img, (180, 180))
-        X.append(resized_img)
-        y.append(flowers_labels_dict[flower_name])
+        imgs.append(resized_img)
+        labels.append(class_ids[flower])
 
-print(f"Loaded {len(X)} images from {data_dir}")
+print(f"Loaded {len(imgs)} images from {data_dir}")
 
-X = np.array(X)
-y = np.array(y)
+imgs = np.array(imgs)
+labels = np.array(labels)
 
 # Split the data into training and testing sets
-X_train, X_temp, y_train, y_temp = train_test_split(
-    X, y, test_size=0.3, random_state=42, stratify=y
+train_imgs, temp_imgs, train_labels, temp_labels = train_test_split(
+    imgs, labels, test_size=0.3, random_state=42, stratify=labels
 )
-X_valid, X_test, y_valid, y_test = train_test_split(
-    X_temp, y_temp, test_size=0.50, random_state=42, stratify=y_temp
+val_imgs, test_imgs, val_labels, test_labels = train_test_split(
+    temp_imgs, temp_labels, test_size=0.50, random_state=42, stratify=temp_labels
 )
 
-print("Train:", len(X_train))  # 70%
-print("Valid:", len(X_valid))  # 15%
-print("Test :", len(X_test))  # 15%
+print("Train:", len(train_imgs))  # 70%
+print("Valid:", len(val_imgs))  # 15%
+print("Test :", len(test_imgs))  # 15%
 # Normalize pixel values from 0-255 to 0-1 for all three splits.
 # Converting to float32 also uses less memory than NumPy's default float64.
-X_train_scaled = X_train.astype("float32") / 255.0
-X_valid_scaled = X_valid.astype("float32") / 255.0
-X_test_scaled = X_test.astype("float32") / 255.0
+train_norm = train_imgs.astype("float32") / 255.0
+val_norm = val_imgs.astype("float32") / 255.0
+test_norm = test_imgs.astype("float32") / 255.0
 
 
 # --- 2. DEFINE THE CNN MODEL WITH DATA AUGMENTATION ---
@@ -100,6 +100,12 @@ model = tf.keras.Sequential(
         # Convolutional Block 3
         tf.keras.layers.Conv2D(64, 3, padding="same", activation="relu"),
         tf.keras.layers.MaxPooling2D(),
+        # Convolutional Block 4
+        tf.keras.layers.Conv2D(128, 3, padding="same", activation="relu"),
+        tf.keras.layers.MaxPooling2D(),
+        # Convolutional Block 5
+        tf.keras.layers.Conv2D(256, 3, padding="same", activation="relu"),
+        tf.keras.layers.MaxPooling2D(),
         tf.keras.layers.Dropout(0.2),
         # Global average pooling collapses each feature map to a single value
         # instead of flattening it, which drastically cuts the number of
@@ -107,7 +113,7 @@ model = tf.keras.Sequential(
         tf.keras.layers.GlobalAveragePooling2D(),
         tf.keras.layers.Dense(128, activation="relu"),
         # Output layer with units equal to the number of classes
-        tf.keras.layers.Dense(len(flowers_labels_dict)),
+        tf.keras.layers.Dense(len(class_ids)),
     ]
 )
 
@@ -134,11 +140,11 @@ early_stop = tf.keras.callbacks.EarlyStopping(
 )
 # Train the model
 history = model.fit(
-    X_train_scaled,
-    y_train,
+    train_norm,
+    train_labels,
     batch_size=64,
     epochs=50,
-    validation_data=(X_valid_scaled, y_valid),
+    validation_data=(val_norm, val_labels),
     callbacks=[early_stop],
     verbose=1,
 )
@@ -147,7 +153,7 @@ history = model.fit(
 # --- 4. EVALUATE AND SAVE ---
 
 # Evaluate the model
-test_loss, test_acc = model.evaluate(X_test_scaled, y_test, verbose=0)
+test_loss, test_acc = model.evaluate(test_norm, test_labels, verbose=0)
 print(f"\nTest accuracy: {test_acc:.4f}")
 
 # Save the model
@@ -184,8 +190,8 @@ print("Performance plot saved to model_performance.png")
 plt.show()
 
 # Visualize predictions
-class_names = list(flowers_labels_dict.keys())
-predictions = model.predict(X_test_scaled)
+class_names = list(class_ids.keys())
+predictions = model.predict(test_norm)
 
 plt.figure(figsize=(10, 10))
 for i in range(25):
@@ -193,16 +199,16 @@ for i in range(25):
     plt.xticks([])
     plt.yticks([])
     plt.grid(False)
-    plt.imshow(X_test[i])
+    plt.imshow(test_imgs[i])
 
-    predicted_label_index = np.argmax(predictions[i])
-    true_label_index = y_test[i]
+    pred_id = np.argmax(predictions[i])
+    true_id = test_labels[i]
 
-    predicted_class = class_names[predicted_label_index]
-    true_class = class_names[true_label_index]
+    pred_class = class_names[pred_id]
+    true_class = class_names[true_id]
 
-    color = "blue" if predicted_label_index == true_label_index else "red"
-    plt.xlabel(f"{predicted_class} ({true_class})", color=color)
+    color = "blue" if pred_id == true_id else "red"
+    plt.xlabel(f"{pred_class} ({true_class})", color=color)
 
 plt.tight_layout()
 plt.savefig("predictions.png")
